@@ -1,0 +1,42 @@
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Virtual Environments
+venv/
+env/
+.venv/
+ENV/
+
+# Large Model Weights (exceeds GitHub 100MB limit)
+checkpoints/
+*.ckpt
+*.pt
+*.bin
+*.pth
+*.safetensors
+*.onnx
+
+# Output Artifacts & Runs
+outputs/
+runs/
+data/outputs/*
+!data/outputs/.gitkeep
+test_export.fbx
+test_maya_ascii.fbx
+test_axis_z.fbx
+test.bvh
+test.glb
+
+# Test snapshot dumps
+snapshots/
+*.tmp
+~*
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

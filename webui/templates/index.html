@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM 3D Body & MHR 骨架姿态估计工作台</title>
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-input {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-input:hover, .glass-input:focus {
+            border-color: #06b6d4;
+        }
+        #three-container canvas {
+            outline: none;
+            border-radius: 0.5rem;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i class="fa-solid fa-person-walking text-xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-white flex items-center gap-2">
+                    SAM 3D Body & MHR 姿态估计工作台
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">Phase 1 独立版</span>
+                </h1>
+                <p class="text-xs text-slate-400">Meta DINOv3 + Momentum Human Rig (127 关节三维骨架推断)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3 text-xs">
+            <div class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="gpu-badge" class="text-slate-300">GPU: 检测中...</span>
+            </div>
+            <div class="px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                <i class="fa-solid fa-microchip text-cyan-400 mr-1"></i> <span id="torch-badge">PyTorch</span>
+            </div>
+            <div class="px-3 py-1.5 rounded-lg bg-cyan-900/40 border border-cyan-700/50 text-cyan-300 font-medium">
+                <i class="fa-solid fa-bone mr-1"></i> 127 Joints MHR
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="flex-1 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-[1800px] w-full mx-auto">
+
+        <!-- Left Column: Input & Presets (lg:col-span-4) -->
+        <div class="lg:col-span-4 flex flex-col space-y-5">
+
+            <!-- Card 1: Image Upload -->
+            <div class="glass-card rounded-2xl p-5 shadow-xl">
+                <h2 class="text-sm font-semibold text-slate-200 mb-3 flex items-center justify-between">
+                    <span><i class="fa-regular fa-image text-cyan-400 mr-2"></i>输入图片</span>
+                    <button id="clear-btn" class="text-xs text-slate-400 hover:text-rose-400 hidden"><i class="fa-solid fa-trash-can mr-1"></i>清空</button>
+                </h2>
+
+                <!-- Dropzone / Upload area -->
+                <div id="dropzone" class="border-2 border-dashed border-slate-700 hover:border-cyan-500/60 rounded-xl p-4 text-center cursor-pointer transition relative bg-slate-900/40 min-h-[220px] flex flex-col items-center justify-center">
+                    <input type="file" id="file-input" accept="image/*" class="hidden">
+                    <div id="drop-placeholder" class="space-y-2">
+                        <div class="w-12 h-12 mx-auto rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-xl">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <p class="text-sm text-slate-300 font-medium">点击上传图片 或 拖拽至此处</p>
+                        <p class="text-xs text-slate-500">支持 JPG, PNG, WebP (自动居中裁剪与缩放)</p>
+                    </div>
+                    <img id="image-preview" class="max-h-[260px] max-w-full rounded-lg object-contain hidden shadow-md" alt="Preview">
+                </div>
+
+                <!-- Action Button -->
+                <button id="run-btn" class="w-full mt-4 py-3 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-lg shadow-cyan-600/25 transition flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span id="run-btn-text">开始 3D 骨架推断</span>
+                </button>
+                <div id="progress-info" class="text-xs text-cyan-400 text-center mt-2 hidden animate-pulse">
+                    <i class="fa-solid fa-spinner fa-spin mr-1"></i> 正在通过 DINOv3 骨干网推理 127 关节姿态...
+                </div>
+            </div>
+
+            <!-- Card 2: 6 Benchmark Presets -->
+            <div class="glass-card rounded-2xl p-5 shadow-xl flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-semibold text-slate-200 flex items-center">
+                        <i class="fa-solid fa-vial-circle-check text-cyan-400 mr-2"></i>交接文档 6 大类评测预设
+                    </h2>
+                    <span class="text-xs text-slate-400">点击即用</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-3">一键加载文档中要求的真人站姿、街舞、机甲、二次元、强透视与交叉遮挡基准图：</p>
+
+                <div id="preset-container" class="grid grid-cols-2 gap-2.5 overflow-y-auto max-h-[380px] pr-1">
+                    <!-- Presets will be dynamically populated -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Results & Interactive 3D (lg:col-span-8) -->
+        <div class="lg:col-span-8 flex flex-col space-y-5">
+
+            <!-- Card: Visualizer Workspace -->
+            <div class="glass-card rounded-2xl p-5 shadow-xl flex-1 flex flex-col min-h-[640px]">
+
+                <!-- Tab Headers -->
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                    <div class="flex space-x-2">
+                        <button id="tab-3d" class="px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-600 text-white flex items-center gap-2 shadow-sm transition">
+                            <i class="fa-solid fa-cube"></i> 交互式 3D 骨架视口
+                        </button>
+                        <button id="tab-multiview" class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition">
+                            <i class="fa-solid fa-table-columns"></i> 4 联屏多视角对比图
+                        </button>
+                        <button id="tab-json" class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition">
+                            <i class="fa-solid fa-code"></i> 标准骨架 JSON 拓扑
+                        </button>
+                    </div>
+
+                    <!-- Metrics Badge -->
+                    <div id="metrics-badge" class="hidden text-xs text-slate-400 flex items-center gap-3">
+                        <span class="bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-cyan-300">
+                            <i class="fa-solid fa-clock mr-1"></i>耗时: <strong id="latency-text">0.0s</strong>
+                        </span>
+                        <span class="bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700 text-emerald-300">
+                            <i class="fa-solid fa-diagram-project mr-1"></i>关节数: <strong>127</strong>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Tab Content 1: Interactive 3D Viewport -->
+                <div id="panel-3d" class="flex-1 flex flex-col relative rounded-xl overflow-hidden bg-slate-950/60 border border-slate-800/80 min-h-[500px]">
+                    <!-- 3D Canvas Container -->
+                    <div id="three-container" class="w-full flex-1 relative min-h-[460px]">
+                        <!-- Overlay Hint / Empty State -->
+                        <div id="three-empty" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 z-10 pointer-events-none">
+                            <i class="fa-solid fa-cube text-5xl mb-3 text-slate-700 animate-bounce"></i>
+                            <p class="text-sm font-medium">请在左侧上传图片或选择 6 类评测预设，点击推断</p>
+                            <p class="text-xs text-slate-600 mt-1">推断完成后将在此直接呈现 360° 可交互 3D 骨架</p>
+                        </div>
+                    </div>
+
+                    <!-- 3D Controls Bar -->
+                    <div id="three-controls" class="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-auto bg-slate-900/80 backdrop-blur px-4 py-2 rounded-xl border border-slate-800 text-xs">
+                        <div class="flex items-center space-x-2 text-slate-300">
+                            <button id="view-front" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">正视图 (XY)</button>
+                            <button id="view-side" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">侧视图 (ZY 深度)</button>
+                            <button id="view-top" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">俯视图 (XZ)</button>
+                            <button id="view-reset" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700"><i class="fa-solid fa-rotate-left mr-1"></i>复位</button>
+                        </div>
+                        <div class="text-slate-400 text-[11px] flex items-center gap-3">
+                            <span><i class="fa-solid fa-mouse mr-1 text-cyan-400"></i>左键旋转</span>
+                            <span><i class="fa-regular fa-hand mr-1 text-cyan-400"></i>右键平移</span>
+                            <span><i class="fa-solid fa-magnifying-glass-plus mr-1 text-cyan-400"></i>滚轮缩放</span>
+                        </div>
+                    </div>
+
+                    <!-- Joint hover tooltip -->
+                    <div id="joint-tooltip" class="absolute top-3 left-3 bg-slate-900/90 text-cyan-300 border border-cyan-800/80 px-3 py-1.5 rounded-lg text-xs font-mono pointer-events-none hidden shadow-lg"></div>
+                </div>
+
+                <!-- Tab Content 2: 4-View Multiview Image -->
+                <div id="panel-multiview" class="flex-1 flex flex-col justify-center items-center rounded-xl bg-slate-950/60 border border-slate-800/80 p-2 hidden min-h-[500px]">
+                    <div id="multiview-empty" class="text-center text-slate-500 py-16">
+                        <i class="fa-solid fa-images text-5xl mb-3 text-slate-700"></i>
+                        <p class="text-sm">尚未生成多视角图</p>
+                    </div>
+                    <img id="multiview-img" class="max-h-[560px] max-w-full rounded-lg object-contain hidden shadow-xl" alt="Multiview Skeleton">
+                </div>
+
+                <!-- Tab Content 3: JSON Inspector -->
+                <div id="panel-json" class="flex-1 rounded-xl bg-slate-950/80 border border-slate-800/80 p-4 font-mono text-xs text-slate-300 overflow-auto hidden max-h-[560px]">
+                    <pre id="json-pre">等待推断数据...</pre>
+                </div>
+
+                <!-- Download Actions Toolbar -->
+                <div id="download-bar" class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs hidden">
+                    <span class="text-slate-400"><i class="fa-solid fa-circle-check text-emerald-400 mr-1.5"></i>产物已就位</span>
+                    <div class="flex items-center space-x-2">
+                        <a id="dl-json" href="#" download class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-download text-cyan-400"></i> 骨架 JSON
+                        </a>
+                        <a id="dl-fbx" href="#" download class="px-3 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-700/80 flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-cube text-indigo-400"></i> FBX 骨架
+                        </a>
+                        <a id="dl-bvh" href="#" download class="px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-700/80 flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-person-running text-emerald-400"></i> BVH 动捕
+                        </a>
+                        <a id="dl-glb" href="#" download class="px-3 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-900/80 text-purple-300 border border-purple-700/80 flex items-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-cube text-purple-400"></i> GLB 模型
+                        </a>
+                        <a id="dl-npz" href="#" download class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-box-archive text-amber-400"></i> 原始 NPZ
+                        </a>
+                        <a id="dl-multiview" href="#" download class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5">
+                            <i class="fa-regular fa-image text-emerald-400"></i> 4联屏图
+                        </a>
+                        <a id="dl-html" href="#" target="_blank" class="px-3 py-1.5 rounded-lg bg-cyan-900/40 hover:bg-cyan-800/60 text-cyan-300 border border-cyan-700 flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> 独立3D网页
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let currentFile = null;
+        let currentPresetId = null;
+        let lastResult = null;
+
+        let currentTargetY = 0;
+        let groundGrid = null;
+
+        // Three.js State
+        let scene, camera, renderer, controls;
+        let jointMeshes = [], boneLines = [];
+        let raycaster, mouse;
+
+        // Init System Status
+        async function loadSystemStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                document.getElementById('gpu-badge').textContent = `GPU: ${data.device_name} (${data.vram_total_gb} GB)`;
+                document.getElementById('torch-badge').textContent = `PyTorch ${data.torch_version}`;
+            } catch (e) {
+                console.error("Status load failed", e);
+            }
+        }
+
+        // Init Presets
+        async function loadPresets() {
+            try {
+                const res = await fetch('/api/presets');
+                const presets = await res.json();
+                const container = document.getElementById('preset-container');
+                container.innerHTML = '';
+                presets.forEach(p => {
+                    const btn = document.createElement('div');
+                    btn.className = "p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/50 cursor-pointer transition flex flex-col justify-between group";
+                    btn.onclick = () => selectPreset(p);
+                    btn.innerHTML = `
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-slate-200 group-hover:text-cyan-300">${p.title}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400 border border-slate-700">${p.tag}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 leading-tight">${p.desc}</p>
+                    `;
+                    container.appendChild(btn);
+                });
+            } catch (e) {
+                console.error("Presets load failed", e);
+            }
+        }
+
+        function selectPreset(preset) {
+            currentPresetId = preset.id;
+            currentFile = null;
+            document.getElementById('drop-placeholder').classList.add('hidden');
+            const preview = document.getElementById('image-preview');
+            preview.src = `/presets/${preset.id}`;
+            preview.classList.remove('hidden');
+            document.getElementById('clear-btn').classList.remove('hidden');
+            document.getElementById('run-btn-text').textContent = `推断: ${preset.title}`;
+        }
+
+        // File dropzone handlers
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const imagePreview = document.getElementById('image-preview');
+        const clearBtn = document.getElementById('clear-btn');
+
+        dropzone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFile(e.target.files[0]);
+            }
+        };
+
+        dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('border-cyan-500'); };
+        dropzone.ondragleave = () => { dropzone.classList.remove('border-cyan-500'); };
+        dropzone.ondrop = (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-cyan-500');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        };
+
+        function handleFile(file) {
+            currentFile = file;
+            currentPresetId = null;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreview.classList.remove('hidden');
+                document.getElementById('drop-placeholder').classList.add('hidden');
+                clearBtn.classList.remove('hidden');
+                document.getElementById('run-btn-text').textContent = `开始 3D 骨架推断`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        clearBtn.onclick = (e) => {
+            e.stopPropagation();
+            currentFile = null;
+            currentPresetId = null;
+            fileInput.value = '';
+            imagePreview.classList.add('hidden');
+            document.getElementById('drop-placeholder').classList.remove('hidden');
+            clearBtn.classList.add('hidden');
+            document.getElementById('run-btn-text').textContent = `开始 3D 骨架推断`;
+        };
+
+        // Run Inference
+        const runBtn = document.getElementById('run-btn');
+        const progressInfo = document.getElementById('progress-info');
+
+        runBtn.onclick = async () => {
+            if (!currentFile && !currentPresetId) {
+                alert("请先上传图片或选择 6 类评测预设！");
+                return;
+            }
+
+            runBtn.disabled = true;
+            progressInfo.classList.remove('hidden');
+
+            const formData = new FormData();
+            if (currentPresetId) {
+                formData.append('preset_id', currentPresetId);
+            } else if (currentFile) {
+                formData.append('file', currentFile);
+            }
+
+            try {
+                const res = await fetch('/api/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "推理执行异常");
+                }
+                displayResults(data);
+            } catch (err) {
+                alert("推断失败: " + err.message);
+            } finally {
+                runBtn.disabled = false;
+                progressInfo.classList.add('hidden');
+            }
+        };
+
+        function displayResults(data) {
+            lastResult = data;
+            document.getElementById('latency-text').textContent = `${data.latency_seconds}s`;
+            document.getElementById('metrics-badge').classList.remove('hidden');
+            document.getElementById('download-bar').classList.remove('hidden');
+
+            // Download buttons
+            document.getElementById('dl-json').href = data.json_url;
+            document.getElementById('dl-npz').href = data.npz_url;
+            if (data.fbx_url) {
+                document.getElementById('dl-fbx').href = data.fbx_url;
+                document.getElementById('dl-fbx').classList.remove('hidden');
+            } else {
+                document.getElementById('dl-fbx').classList.add('hidden');
+            }
+            if (data.bvh_url) {
+                document.getElementById('dl-bvh').href = data.bvh_url;
+                document.getElementById('dl-bvh').classList.remove('hidden');
+            } else {
+                document.getElementById('dl-bvh').classList.add('hidden');
+            }
+            if (data.glb_url) {
+                document.getElementById('dl-glb').href = data.glb_url;
+                document.getElementById('dl-glb').classList.remove('hidden');
+            } else {
+                document.getElementById('dl-glb').classList.add('hidden');
+            }
+            document.getElementById('dl-multiview').href = data.multiview_url;
+            document.getElementById('dl-html').href = data.html_url;
+
+            // Multiview image
+            const mvImg = document.getElementById('multiview-img');
+            mvImg.src = data.multiview_url;
+            mvImg.classList.remove('hidden');
+            document.getElementById('multiview-empty').classList.add('hidden');
+
+            // JSON preview
+            document.getElementById('json-pre').textContent = JSON.stringify(data.skeleton, null, 2);
+
+            // Render 3D Viewport
+            renderSkeleton3D(data.skeleton);
+        }
+
+        // Tab Switching
+        const tab3d = document.getElementById('tab-3d');
+        const tabMv = document.getElementById('tab-multiview');
+        const tabJson = document.getElementById('tab-json');
+        const panel3d = document.getElementById('panel-3d');
+        const panelMv = document.getElementById('panel-multiview');
+        const panelJson = document.getElementById('panel-json');
+
+        function switchTab(activeTab, activePanel) {
+            [tab3d, tabMv, tabJson].forEach(t => {
+                t.className = "px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center gap-2 transition";
+            });
+            activeTab.className = "px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-600 text-white flex items-center gap-2 shadow-sm transition";
+
+            panel3d.classList.add('hidden');
+            panelMv.classList.add('hidden');
+            panelJson.classList.add('hidden');
+            activePanel.classList.remove('hidden');
+
+            if (activePanel === panel3d && renderer) {
+                onWindowResize();
+            }
+        }
+
+        tab3d.onclick = () => switchTab(tab3d, panel3d);
+        tabMv.onclick = () => switchTab(tabMv, panelMv);
+        tabJson.onclick = () => switchTab(tabJson, panelJson);
+
+        // Three.js 3D Viewer Implementation
+        function initThree() {
+            const container = document.getElementById('three-container');
+            const width = container.clientWidth || 800;
+            const height = container.clientHeight || 500;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.05, 50);
+            camera.position.set(0, 1.2, 3.2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0.9, 0);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(2, 4, 3);
+            scene.add(dirLight);
+
+            // Ground grid
+            groundGrid = new THREE.GridHelper(4, 20, 0x06b6d4, 0x1e293b);
+            groundGrid.position.y = -1.0;
+            scene.add(groundGrid);
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            container.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('three-container');
+            if (!container || !renderer || !camera) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (controls) controls.update();
+            if (renderer && scene && camera) renderer.render(scene, camera);
+        }
+
+        function renderSkeleton3D(skeletonData) {
+            document.getElementById('three-empty').classList.add('hidden');
+
+            // Clear old meshes
+            jointMeshes.forEach(m => scene.remove(m));
+            boneLines.forEach(l => scene.remove(l));
+            jointMeshes = [];
+            boneLines = [];
+
+            const skel = skeletonData.skeleton || {};
+            const worldPositions = skel.world_positions || [];
+            const jointNames = skel.joint_names || [];
+            const parentIndices = skel.parent_indices || [];
+
+            if (worldPositions.length === 0) return;
+
+            // Camera frame: root (joint 0) is pelvis center
+            // Camera coordinate system: X-right, Y-DOWN, Z-forward
+            // Three.js world coordinate system: X-right, Y-UP, Z-towards viewer
+            const [rootX, rootY, rootZ] = worldPositions[0];
+
+            let minY = Infinity, maxY = -Infinity;
+            const transformedPoints = [];
+
+            for (let i = 0; i < worldPositions.length; i++) {
+                const rx = worldPositions[i][0];
+                const ry = worldPositions[i][1];
+                const rz = worldPositions[i][2];
+
+                // Coordinate transform: Invert Y so up is UP! Invert Z so depth matches viewer!
+                const tx = rx - rootX;
+                const ty = -(ry - rootY);
+                const tz = -(rz - rootZ);
+
+                transformedPoints.push(new THREE.Vector3(tx, ty, tz));
+                if (ty < minY) minY = ty;
+                if (ty > maxY) maxY = ty;
+            }
+
+            // Adjust ground grid to sit directly below the lowest foot point
+            if (groundGrid) {
+                groundGrid.position.y = minY - 0.03;
+            }
+
+            // Set orbit controls target to the center of body
+            currentTargetY = (minY + maxY) / 2;
+            controls.target.set(0, currentTargetY, 0);
+            camera.position.set(0.4, currentTargetY + 0.2, 2.6);
+            controls.update();
+
+            // Create Joint Spheres
+            const sphereGeo = new THREE.SphereGeometry(0.016, 16, 16);
+            const pinkMat = new THREE.MeshStandardMaterial({ color: 0xec4899, roughness: 0.3 });
+            const cyanMat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.3 });
+            const yellowMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 });
+
+            for (let i = 0; i < transformedPoints.length; i++) {
+                const pt = transformedPoints[i];
+                const name = jointNames[i] || `joint_${i}`;
+                let mat = pinkMat;
+                if (name.includes("spine") || name.includes("root") || name.includes("pelvis")) {
+                    mat = cyanMat;
+                } else if (name.includes("head") || name.includes("neck") || name.includes("face")) {
+                    mat = yellowMat;
+                }
+                const mesh = new THREE.Mesh(sphereGeo, mat);
+                mesh.position.copy(pt);
+                mesh.userData = { id: i, name: name, pos: [pt.x, pt.y, pt.z] };
+                scene.add(mesh);
+                jointMeshes.push(mesh);
+            }
+
+            // Create Bone Connections
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, linewidth: 2 });
+            for (let i = 0; i < parentIndices.length; i++) {
+                const pIdx = parentIndices[i];
+                if (pIdx >= 0 && pIdx < transformedPoints.length) {
+                    const pts = [
+                        transformedPoints[pIdx],
+                        transformedPoints[i]
+                    ];
+                    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+                    const line = new THREE.Line(geom, lineMat);
+                    scene.add(line);
+                    boneLines.push(line);
+                }
+            }
+        }
+
+        // Tooltip hover
+        function onMouseMove(event) {
+            const container = document.getElementById('three-container');
+            const rect = container.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(jointMeshes);
+            const tooltip = document.getElementById('joint-tooltip');
+
+            if (intersects.length > 0) {
+                const data = intersects[0].object.userData;
+                tooltip.style.left = `${event.clientX - rect.left + 15}px`;
+                tooltip.style.top = `${event.clientY - rect.top + 15}px`;
+                tooltip.innerHTML = `<strong>#${data.id} ${data.name}</strong><br>X: ${data.pos[0].toFixed(3)} Y: ${data.pos[1].toFixed(3)} Z: ${data.pos[2].toFixed(3)}`;
+                tooltip.classList.remove('hidden');
+            } else {
+                tooltip.classList.add('hidden');
+            }
+        }
+
+        // Camera Angle Buttons
+        document.getElementById('view-front').onclick = () => {
+            camera.position.set(0, currentTargetY, 2.6);
+            controls.target.set(0, currentTargetY, 0);
+            controls.update();
+        };
+        document.getElementById('view-side').onclick = () => {
+            camera.position.set(2.6, currentTargetY, 0);
+            controls.target.set(0, currentTargetY, 0);
+            controls.update();
+        };
+        document.getElementById('view-top').onclick = () => {
+            camera.position.set(0, currentTargetY + 2.6, 0.001);
+            controls.target.set(0, currentTargetY, 0);
+            controls.update();
+        };
+        document.getElementById('view-reset').onclick = () => {
+            camera.position.set(0.4, currentTargetY + 0.2, 2.6);
+            controls.target.set(0, currentTargetY, 0);
+            controls.update();
+        };
+
+        // Window onload
+        window.addEventListener('load', () => {
+            loadSystemStatus();
+            loadPresets();
+            initThree();
+        });
+    </script>
+</body>
+</html>
