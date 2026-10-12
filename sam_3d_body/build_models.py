@@ -17,6 +17,9 @@ def load_sam_3d_body(checkpoint_path: str = "", device: str = "cuda", mhr_path: 
         model_cfg = os.path.join(
             os.path.dirname(os.path.dirname(checkpoint_path)), "model_config.yaml"
         )
+    if not os.path.exists(model_cfg):
+        # Looks at package dir
+        model_cfg = os.path.join(os.path.dirname(__file__), "model_config.yaml")
 
     model_cfg = get_config(model_cfg)
 

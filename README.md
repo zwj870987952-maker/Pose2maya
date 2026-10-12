@@ -88,20 +88,34 @@ python download_models.py
 
 ---
 
-### 5. 快速使用
+### 5. 快速使用 (Quick Start)
 
-#### 1. 安装环境依赖
-```powershell
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install -r requirements.txt
-```
-
-#### 2. 启动 WebUI 交互工作台
-直接双击运行 [`start_webui.bat`](start_webui.bat)，或在终端执行：
+#### 🚀 方式一：全自动零干预一键启动 (推荐)
+在项目根目录**直接双击运行 [`start_webui.bat`](start_webui.bat)** 或在终端运行：
 ```powershell
 python start_webui.py
 ```
-浏览器将自动弹出 `http://127.0.0.1:7860` 工作台。上传图片后点击「开始 3D 姿态推断」，即可在视口交互并一键下载 FBX、BVH、GLB、JSON。
+> [!TIP]
+> 启动脚本内置**全自动自检与自愈引擎**：
+> 1. **环境自检**：自动检测 Python 环境并自动通过国内清华高速镜像安装所有缺失依赖与 PyTorch CUDA 加速环境。
+> 2. **资产自检**：自动检查主模型权重 (`model.ckpt`) 与骨架资产 (`mhr_model.pt`)，缺失时自动通过国内高速镜像源后台断点续传下载。
+> 3. **配置自愈**：自动补齐 `model_config.yaml` 与 127 关节骨骼定义，规避任何路径异常。
+> 4. **自动弹窗**：自动分配空闲端口，完成 GPU 显存预热并自动在浏览器弹出 WebUI。
+> **全程无需任何手动操作！**
+
+#### 方式二：手动配置运行
+若希望在自定义隔离环境中手动操作：
+```powershell
+# 1. 安装 PyTorch CUDA 版与项目依赖
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+
+# 2. 下载模型权重 (若未下载)
+python download_models.py
+
+# 3. 启动 WebUI 工作台
+python start_webui.py
+```
 
 #### 3. 命令行批量执行
 ```powershell
