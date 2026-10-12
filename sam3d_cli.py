@@ -45,6 +45,21 @@ class SAM3DStandaloneRunner:
         print(f"[SAM3D] Loading checkpoint: {checkpoint_path}")
         print(f"[SAM3D] Loading MHR: {mhr_path}")
 
+        if not os.path.exists(checkpoint_path) or not os.path.exists(mhr_path):
+            missing = []
+            if not os.path.exists(checkpoint_path): missing.append(f"model.ckpt ({checkpoint_path})")
+            if not os.path.exists(mhr_path): missing.append(f"mhr_model.pt ({mhr_path})")
+            msg = (
+                f"\n====================================================================\n"
+                f"[SAM3D 错误] 未找到必要的模型权重文件:\n"
+                f"  -> {', '.join(missing)}\n"
+                f"由于 GitHub 限制单文件 100MB，大模型权重需单独下载。\n"
+                f"请在项目根目录运行以下命令一键自动下载：\n"
+                f"    python download_models.py (或在 Windows 直接双击 download_models.bat)\n"
+                f"====================================================================\n"
+            )
+            raise FileNotFoundError(msg)
+
         self.model, self.model_cfg = load_sam_3d_body(checkpoint_path, device=self.device, mhr_path=mhr_path)
         self.estimator = SAM3DBodyEstimator(
             sam_3d_body_model=self.model,

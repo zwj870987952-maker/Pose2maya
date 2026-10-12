@@ -57,26 +57,58 @@ Pose2maya/
 ├── start_webui.py              # WebUI 启动脚本 (自动分配端口并调用浏览器)
 ├── start_webui.bat             # Windows 桌面一键启动脚本
 ├── sam3d_cli.py                # 命令行 CLI 批量姿态推断工具
+├── download_models.py          # 模型权重一键自动下载脚本 (支持大陆高速镜像)
+├── download_models.bat         # Windows 桌面一键下载权重脚本
 └── requirements.txt            # Python 依赖清单
 ```
 
 ---
 
-### 4. 快速使用
+### 4. 模型权重下载 (Model Weights Download)
 
-#### 启动 WebUI 界面
+> [!IMPORTANT]
+> 由于 GitHub 单文件 100MB 限制，大模型预训练权重未包含在 git 代码库中。**首次运行前请务必准备以下模型权重**：
+> 1. **主模型权重 (`model.ckpt`，约 2.01 GB)**
+> 2. **MHR 骨骼几何资产 (`mhr_model.pt`，约 696 MB)**
+
+#### 方式一：一键自动下载（推荐）
+在项目根目录直接双击运行 [`download_models.bat`](download_models.bat)，或在终端执行：
+```powershell
+python download_models.py
+```
+- 默认自动启用中国大陆高速镜像源（`hf-mirror.com`），无需配置网络代理，支持断点续传。
+- 如需使用 Meta 官方需授权源，可指定参数：`python download_models.py --official --token 你的HF_TOKEN`。
+
+#### 方式二：手动下载与放置
+您也可以从 Hugging Face 手动下载对应文件，并放置在项目对应目录下：
+| 权重文件名 | 文件大小 | 本地目标路径 | 下载链接 (免审批镜像 / 官方源) |
+| :--- | :---: | :--- | :--- |
+| `model.ckpt` | 2.01 GB | `checkpoints/sam-3d-body-dinov3/model.ckpt` | [镜像下载](https://huggingface.co/jetjodh/sam-3d-body-dinov3/blob/main/model.ckpt) · [Meta官方](https://huggingface.co/facebook/sam-3d-body-dinov3/blob/main/model.ckpt) |
+| `mhr_model.pt` | 696 MB | `checkpoints/sam-3d-body-dinov3/assets/mhr_model.pt` | [镜像下载](https://huggingface.co/jetjodh/sam-3d-body-dinov3/blob/main/assets/mhr_model.pt) · [Meta官方](https://huggingface.co/facebook/sam-3d-body-dinov3/blob/main/assets/mhr_model.pt) |
+
+---
+
+### 5. 快速使用
+
+#### 1. 安装环境依赖
+```powershell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+```
+
+#### 2. 启动 WebUI 交互工作台
 直接双击运行 [`start_webui.bat`](start_webui.bat)，或在终端执行：
 ```powershell
 python start_webui.py
 ```
 浏览器将自动弹出 `http://127.0.0.1:7860` 工作台。上传图片后点击「开始 3D 姿态推断」，即可在视口交互并一键下载 FBX、BVH、GLB、JSON。
 
-#### 命令行批量执行
+#### 3. 命令行批量执行
 ```powershell
 python sam3d_cli.py --image "test.jpg" --output_dir "outputs/my_test"
 ```
 
-#### Maya 视口内直接导入并生成骨架
+#### 4. Maya 视口内直接导入并生成骨架
 在 Maya Script Editor 中运行：
 ```python
 import sys
@@ -93,6 +125,10 @@ builder.build_skeleton(r"outputs/my_test/test_skeleton.json")
 ## English Summary
 
 **Pose2maya** recovers full 3D human pose estimations from a single 2D RGB image using **SAM 3D Body (DINOv3)** and Meta's **MHR (Momentum Human Rig 127-joint)** system, and delivers production-ready skeletal assets (**FBX, BVH, GLB, JSON**) fully aligned with **Autodesk Maya** and **Unreal Engine 5**.
+
+### Weights Download
+Weights exceed GitHub's 100MB limit and must be acquired before running:
+- Run `python download_models.py` (or double-click `download_models.bat`) to automatically fetch `model.ckpt` (2.01 GB) and `mhr_model.pt` (696 MB) from HuggingFace mirror.
 
 ### Key Highlights
 - **WebGL 3D Studio**: Browser-based interactive viewport with 360° orbit inspection and benchmark presets.
