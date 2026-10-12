@@ -117,11 +117,11 @@ python download_models.py
 python start_webui.py
 ```
 
-#### 🤖 方式三：交由 AI Agent 自动安装部署 (Prompt for AI Agent)
+#### 🤖 方式三：交由 AI Agent 自动安装资产与依赖 (Prompt for AI Agent)
 如果您使用 AI Agent（如 Claude Code, Cursor, Windsurf, Devin 等），可直接将以下指令复制给 Agent：
 
-> **一句话指令**：  
-> `请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在根目录下运行 python start_webui.py（或双击 start_webui.bat）。脚本自带全自动自检，请协助监督并确保其自动完成依赖安装、大模型权重下载（download_models.py）并成功打开 Web 界面。`
+> **一句话安装指令**：  
+> `请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在环境中自主安装好所有 Python 依赖与大模型资产（包含 PyTorch CUDA、requirements.txt 以及运行 download_models.py 下载 model.ckpt 和 mhr_model.pt 权重），验证所有资产完整就绪后通知我，不需要运行启动脚本。`
 
 *(更多详细提示词请参阅独立文档 [`AI_AGENT_PROMPT.md`](AI_AGENT_PROMPT.md))*
 
