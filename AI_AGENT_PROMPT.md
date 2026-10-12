@@ -9,22 +9,16 @@
 
 ---
 
-## 🎯 一句话极简指令 (One-Sentence Prompt)
+## 📋 推荐：标准分步安装指令 (Standard Installation Prompt)
 
-```text
-请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在系统常规的独立 Python/venv 环境中自主安装好所有依赖与模型资产（包含 PyTorch CUDA、requirements.txt 以及运行 download_models.py 下载 model.ckpt 和 mhr_model.pt 权重），验证所有资产就绪后通知我。注意：这是独立的深度学习后台，严禁通过 Maya 或 mayapy 去执行安装与下载，且不需要运行 WebUI 启动脚本。
-```
-
----
-
-## 📋 标准安装指令 (Standard Installation Prompt)
+直接复制以下整段提示词发送给 AI Agent（如 Claude Code, Cursor, Windsurf, Devin 等）：
 
 ```markdown
 请帮我把 Pose2maya 项目的所有运行依赖与模型权重资产完整安装并配置就绪：
 
 【环境约束】：
-- 本项目是独立深度学习服务端，必须在操作系统常规 Python 终端下执行。
-- 严禁使用 Maya 内部解释器 (mayapy) 或通过 Maya 插件通道执行安装下载。
+- 本项目是系统级独立的深度学习服务端，必须在操作系统常规 Python 终端下执行。
+- 严禁使用 Maya 内部解释器 (mayapy) 或通过 Maya 插件通道执行安装下载！
 - 本次任务仅完成环境安装与资产下载，暂不需要启动 WebUI 服务。
 
 【执行步骤】：
@@ -47,4 +41,12 @@
    python sam3d_cli.py --image test_benchmark/01_human_standard.jpg
 
 5. 安装与验证完成，向我汇报就绪状态。
+```
+
+---
+
+## 🎯 备选：一句话极简指令 (One-Sentence Prompt)
+
+```text
+请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在系统常规的独立 Python/venv 环境中自主安装好所有依赖与模型资产（包含 PyTorch CUDA、requirements.txt 以及运行 download_models.py 下载 model.ckpt 和 mhr_model.pt 权重），验证所有资产就绪后通知我。注意：这是独立的深度学习后台，严禁通过 Maya 或 mayapy 去执行安装与下载，且不需要运行 WebUI 启动脚本。
 ```
