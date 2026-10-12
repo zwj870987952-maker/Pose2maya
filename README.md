@@ -121,9 +121,9 @@ python start_webui.py
 如果您使用 AI Agent（如 Claude Code, Cursor, Windsurf, Devin 等），可直接将以下指令复制给 Agent：
 
 > **一句话安装指令**：  
-> `请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在环境中自主安装好所有 Python 依赖与大模型资产（包含 PyTorch CUDA、requirements.txt 以及运行 download_models.py 下载 model.ckpt 和 mhr_model.pt 权重），验证所有资产完整就绪后通知我，不需要运行启动脚本。`
+> `请帮我拉取 https://github.com/zwj870987952-maker/Pose2maya.git，并在系统常规的独立 Python/venv 环境中自主安装好所有依赖与模型资产（包含 PyTorch CUDA、requirements.txt 以及运行 download_models.py 下载 model.ckpt 和 mhr_model.pt 权重），验证所有资产就绪后通知我。注意：这是独立的深度学习后台，严禁通过 Maya 或 mayapy 去执行安装与下载，且不需要运行 WebUI 启动脚本。`
 
-*(更多详细提示词请参阅独立文档 [`AI_AGENT_PROMPT.md`](AI_AGENT_PROMPT.md))*
+*(更多详细提示词与环境隔离规则请参阅独立文档 [`AI_AGENT_PROMPT.md`](AI_AGENT_PROMPT.md))*
 
 #### 3. 命令行批量执行
 ```powershell

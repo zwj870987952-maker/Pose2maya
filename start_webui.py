@@ -22,6 +22,15 @@ import shutil
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(REPO_ROOT)
 
+# Guard against accidental execution inside Maya DCC
+if "mayapy" in sys.executable.lower() or ("autodesk" in sys.executable.lower() and "maya" in sys.executable.lower()):
+    print("=" * 70)
+    print(" [拦截警告] 检测到您正在尝试通过 Autodesk Maya 内置解释器 (mayapy) 启动 WebUI！")
+    print(" Pose2maya 是独立的深度学习运算服务端，依赖 PyTorch (CUDA) 与系统环境。")
+    print(" 严禁在 Maya 内部启动服务端！请使用系统常规 Python (如 python start_webui.py) 运行。")
+    print("=" * 70)
+    sys.exit(1)
+
 def print_banner(step_str, desc_str):
     print(f"\n[{step_str}] {desc_str}")
     print("-" * 65)

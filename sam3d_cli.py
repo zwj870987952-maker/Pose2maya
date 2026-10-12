@@ -11,6 +11,15 @@ import torch
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(REPO_ROOT)
 
+# Guard against accidental execution inside Maya DCC
+if "mayapy" in sys.executable.lower() or ("autodesk" in sys.executable.lower() and "maya" in sys.executable.lower()):
+    print("=" * 70)
+    print(" [拦截警告] 检测到您正在尝试通过 Autodesk Maya 内置解释器 (mayapy) 运行 CLI 推理！")
+    print(" Pose2maya 是独立深度学习服务端，依赖 PyTorch (CUDA) 独立环境。")
+    print(" 请切换为操作系统常规 Python 解释器 (如 python sam3d_cli.py) 运行。")
+    print("=" * 70)
+    sys.exit(1)
+
 from sam_3d_body import load_sam_3d_body, SAM3DBodyEstimator
 from pipeline.export_standards import export_standard_skeleton_and_raw
 from pipeline.visualizer import render_multiview_skeleton, generate_interactive_html

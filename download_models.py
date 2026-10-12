@@ -12,6 +12,16 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 CKPT_DIR = os.path.join(REPO_ROOT, "checkpoints", "sam-3d-body-dinov3")
 ASSETS_DIR = os.path.join(CKPT_DIR, "assets")
 
+# Guard against accidental execution inside Maya DCC
+if "mayapy" in sys.executable.lower() or ("autodesk" in sys.executable.lower() and "maya" in sys.executable.lower()):
+    print("=" * 70)
+    print(" [拦截警告] 检测到您正在尝试通过 Autodesk Maya 内置解释器 (mayapy) 运行此脚本！")
+    print(" Pose2maya 是独立的深度学习运算服务端，依赖 PyTorch (CUDA) 与系统环境。")
+    print(" 严禁在 Maya 内部下载大模型或执行 pip 安装！")
+    print(" 请切换为操作系统常规 Python 解释器 (如 python / venv) 执行本脚本。")
+    print("=" * 70)
+    sys.exit(1)
+
 # HuggingFace repositories
 PRIMARY_REPO = "jetjodh/sam-3d-body-dinov3"       # Public open mirror (No token/approval required)
 OFFICIAL_REPO = "facebook/sam-3d-body-dinov3"     # Official Meta repository (Gated)
