@@ -27,3 +27,7 @@ pyyaml
 requests
 huggingface_hub
 braceexpand
+termcolor
+tabulate
+iopath
+fvcore

@@ -115,6 +115,10 @@ def ensure_python_dependencies():
         ("jinja2", "jinja2"),
         ("matplotlib", "matplotlib"),
         ("braceexpand", "braceexpand"),
+        ("termcolor", "termcolor"),
+        ("tabulate", "tabulate"),
+        ("iopath", "iopath"),
+        ("fvcore", "fvcore"),
     ]
 
     missing = []
