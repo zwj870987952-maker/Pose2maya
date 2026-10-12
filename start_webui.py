@@ -113,6 +113,8 @@ def ensure_python_dependencies():
         ("yaml", "pyyaml"),
         ("requests", "requests"),
         ("jinja2", "jinja2"),
+        ("matplotlib", "matplotlib"),
+        ("braceexpand", "braceexpand"),
     ]
 
     missing = []

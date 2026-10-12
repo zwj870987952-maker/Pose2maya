@@ -4,7 +4,11 @@ import os
 import time
 from typing import Any, List
 
-import braceexpand
+try:
+    import braceexpand
+except ImportError:
+    braceexpand = None
+
 import cv2
 import numpy as np
 
@@ -18,7 +22,10 @@ def expand(s):
 def expand_urls(urls: str | List[str]):
     if isinstance(urls, str):
         urls = [urls]
-    urls = [u for url in urls for u in braceexpand.braceexpand(expand(url))]
+    if braceexpand is not None:
+        urls = [u for url in urls for u in braceexpand.braceexpand(expand(url))]
+    else:
+        urls = [expand(u) for u in urls]
     return urls
 
 

@@ -12,6 +12,7 @@ opencv-python>=4.8.0
 trimesh>=4.0.0
 roma>=1.5.0
 Pillow>=10.0.0
+matplotlib>=3.7.0
 
 # WebUI Framework
 flask>=3.0.0
@@ -25,3 +26,4 @@ tqdm
 pyyaml
 requests
 huggingface_hub
+braceexpand
