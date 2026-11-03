@@ -1,20 +1,30 @@
 import os
 import json
+from datetime import datetime
 import numpy as np
-from scipy.spatial.transform import Rotation as R
+
+from pose_core.mhr_adapter import standardize_mhr_raw
+from pose_core.schema import to_json_compatible
+from pose_core.math3d import q_normalize, cam_rot_to_maya_rot, cam_pos_to_maya
 
 def rotmat_to_quaternion(rot_mats):
     """
     Convert (N, 3, 3) rotation matrices to (N, 4) quaternions [x, y, z, w].
     """
-    quats = []
-    for mat in rot_mats:
-        try:
-            r = R.from_matrix(mat)
-            quats.append(r.as_quat().tolist())
-        except Exception:
-            quats.append([0.0, 0.0, 0.0, 1.0])
-    return quats
+    try:
+        from scipy.spatial.transform import Rotation as R
+        quats = []
+        for mat in rot_mats:
+            try:
+                r = R.from_matrix(mat)
+                quats.append(r.as_quat().tolist())
+            except Exception:
+                quats.append([0.0, 0.0, 0.0, 1.0])
+        return quats
+    except ImportError:
+        # Fallback to pure math3d
+        from pose_core.math3d import mat3_to_q
+        return [mat3_to_q(m) for m in rot_mats]
 
 def compute_local_rotations(global_rot_mats, parent_indices):
     """
@@ -37,16 +47,20 @@ def export_standard_skeleton_and_raw(
     image_path,
     output_dir,
     base_name=None,
-    skeleton_def=None
+    skeleton_def=None,
+    bbox=None
 ):
     """
-    Saves two files:
+    Saves export files:
     1. <basename>_raw_mhr.npz: Full uncompressed/raw model output
-    2. <basename>_skeleton.json: Normalized standard skeleton according to Section 7.2
+    2. <basename>_skeleton.json: Normalized standard skeleton (legacy Phase 1 compatible)
+    3. <basename>_pose_v2.json: Standard PoseSample v2 format
     """
     os.makedirs(output_dir, exist_ok=True)
     if base_name is None:
         base_name = os.path.splitext(os.path.basename(image_path))[0]
+
+    now_iso = datetime.now().isoformat()
 
     # 1. Save Raw NPZ
     raw_npz_path = os.path.join(output_dir, f"{base_name}_raw_mhr.npz")
@@ -58,7 +72,17 @@ def export_standard_skeleton_and_raw(
             npz_data[k] = np.array(v)
     np.savez_compressed(raw_npz_path, **npz_data)
 
-    # 2. Build Standard Normalized Skeleton
+    # 2. Build PoseSample v2 using pose_core.mhr_adapter
+    pose_v2_sample, pose_v2_dict = standardize_mhr_raw(
+        output_dict=output_dict,
+        image_path=image_path,
+        bbox=bbox
+    )
+    v2_json_path = os.path.join(output_dir, f"{base_name}_pose_v2.json")
+    with open(v2_json_path, "w", encoding="utf-8") as f:
+        json.dump(pose_v2_dict, f, indent=2, ensure_ascii=False)
+
+    # 3. Build Standard Legacy Phase 1 Skeleton JSON for backward compatibility
     joint_coords = output_dict.get("pred_joint_coords") # (127, 3)
     global_rots = output_dict.get("pred_global_rots")   # (127, 3, 3)
     cam_t = output_dict.get("pred_cam_t")               # (3,)
@@ -83,8 +107,6 @@ def export_standard_skeleton_and_raw(
     if not joint_names and joint_coords is not None:
         joint_names = [f"mhr_joint_{i:03d}" for i in range(len(joint_coords))]
 
-    # Compute Local Rotations and Quaternions
-    local_rots = None
     local_quats = []
     global_quats = []
     if global_rots is not None:
@@ -92,14 +114,14 @@ def export_standard_skeleton_and_raw(
         local_quats = rotmat_to_quaternion(local_rots)
         global_quats = rotmat_to_quaternion(global_rots)
 
-    standard_skeleton = {
+    legacy_skeleton = {
         "metadata": {
-            "source_image": os.path.abspath(image_path),
+            "source_image": os.path.abspath(image_path) if image_path else "",
             "source_model": "facebook/sam-3d-body-dinov3",
             "coordinate_system": "camera_frame (X-right, Y-down, Z-forward)",
             "units": "meters",
-            "timestamp": "2026-10-11",
-            "phase": "Phase 1 - Standalone Skeleton Recovery"
+            "timestamp": now_iso,
+            "phase": "Phase 2 - Rig Retargeting Engine"
         },
         "camera": {
             "focal_length": focal_length,
@@ -128,8 +150,8 @@ def export_standard_skeleton_and_raw(
         }
     }
 
-    json_path = os.path.join(output_dir, f"{base_name}_skeleton.json")
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(standard_skeleton, f, indent=2, ensure_ascii=False)
+    legacy_json_path = os.path.join(output_dir, f"{base_name}_skeleton.json")
+    with open(legacy_json_path, "w", encoding="utf-8") as f:
+        json.dump(to_json_compatible(legacy_skeleton), f, indent=2, ensure_ascii=False)
 
-    return raw_npz_path, json_path
+    return raw_npz_path, legacy_json_path

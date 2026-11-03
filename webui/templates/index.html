@@ -61,7 +61,7 @@
             <div>
                 <h1 class="font-bold text-lg text-white flex items-center gap-2">
                     SAM 3D Body & MHR 姿态估计工作台
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">Phase 1 独立版</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">Phase 2 重定向引擎与独立服务端</span>
                 </h1>
                 <p class="text-xs text-slate-400">Meta DINOv3 + Momentum Human Rig (127 关节三维骨架推断)</p>
             </div>
@@ -112,8 +112,8 @@
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                     <span id="run-btn-text">开始 3D 骨架推断</span>
                 </button>
-                <div id="progress-info" class="text-xs text-cyan-400 text-center mt-2 hidden animate-pulse">
-                    <i class="fa-solid fa-spinner fa-spin mr-1"></i> 正在通过 DINOv3 骨干网推理 127 关节姿态...
+                <div id="progress-info" class="text-xs text-cyan-400 text-center mt-2 hidden">
+                    <i class="fa-solid fa-spinner fa-spin mr-1"></i> <span id="progress-status-text">正在提交至后台推理队列...</span>
                 </div>
             </div>
 
@@ -374,16 +374,35 @@
                 formData.append('file', currentFile);
             }
 
+            const statusText = document.getElementById('progress-status-text');
             try {
-                const res = await fetch('/api/predict', {
+                if (statusText) statusText.textContent = "正在提交至推理队列...";
+                const res = await fetch('/api/jobs', {
                     method: 'POST',
                     body: formData
                 });
-                const data = await res.json();
+                const postData = await res.json();
                 if (!res.ok) {
-                    throw new Error(data.error || "推理执行异常");
+                    throw new Error(postData.error || "任务创建失败");
                 }
-                displayResults(data);
+                const jobId = postData.job_id;
+
+                let finished = false;
+                while (!finished) {
+                    await new Promise(r => setTimeout(r, 600));
+                    const pollRes = await fetch('/api/jobs/' + jobId);
+                    const pollData = await pollRes.json();
+                    if (pollData.status === 'queued') {
+                        if (statusText) statusText.textContent = "任务排队中...";
+                    } else if (pollData.status === 'running') {
+                        if (statusText) statusText.textContent = "模型正在推理 127 关节姿态...";
+                    } else if (pollData.status === 'succeeded') {
+                        finished = true;
+                        displayResults(pollData.result);
+                    } else if (pollData.status === 'failed') {
+                        throw new Error(pollData.error || "推理执行失败");
+                    }
+                }
             } catch (err) {
                 alert("推断失败: " + err.message);
             } finally {
@@ -393,46 +412,87 @@
         };
 
         function displayResults(data) {
+            if (!data) return;
             lastResult = data;
-            document.getElementById('latency-text').textContent = `${data.latency_seconds}s`;
+            document.getElementById('latency-text').textContent = `${data.latency_seconds || 0}s`;
             document.getElementById('metrics-badge').classList.remove('hidden');
             document.getElementById('download-bar').classList.remove('hidden');
 
             // Download buttons
-            document.getElementById('dl-json').href = data.json_url;
-            document.getElementById('dl-npz').href = data.npz_url;
+            const dlJson = document.getElementById('dl-json');
+            if (data.json_url) {
+                dlJson.href = data.json_url;
+                dlJson.classList.remove('hidden');
+            } else {
+                dlJson.classList.add('hidden');
+            }
+
+            const dlNpz = document.getElementById('dl-npz');
+            if (data.npz_url) {
+                dlNpz.href = data.npz_url;
+                dlNpz.classList.remove('hidden');
+            } else {
+                dlNpz.classList.add('hidden');
+            }
+
+            const dlFbx = document.getElementById('dl-fbx');
             if (data.fbx_url) {
-                document.getElementById('dl-fbx').href = data.fbx_url;
-                document.getElementById('dl-fbx').classList.remove('hidden');
+                dlFbx.href = data.fbx_url;
+                dlFbx.classList.remove('hidden');
             } else {
-                document.getElementById('dl-fbx').classList.add('hidden');
+                dlFbx.classList.add('hidden');
             }
+
+            const dlBvh = document.getElementById('dl-bvh');
             if (data.bvh_url) {
-                document.getElementById('dl-bvh').href = data.bvh_url;
-                document.getElementById('dl-bvh').classList.remove('hidden');
+                dlBvh.href = data.bvh_url;
+                dlBvh.classList.remove('hidden');
             } else {
-                document.getElementById('dl-bvh').classList.add('hidden');
+                dlBvh.classList.add('hidden');
             }
+
+            const dlGlb = document.getElementById('dl-glb');
             if (data.glb_url) {
-                document.getElementById('dl-glb').href = data.glb_url;
-                document.getElementById('dl-glb').classList.remove('hidden');
+                dlGlb.href = data.glb_url;
+                dlGlb.classList.remove('hidden');
             } else {
-                document.getElementById('dl-glb').classList.add('hidden');
+                dlGlb.classList.add('hidden');
             }
-            document.getElementById('dl-multiview').href = data.multiview_url;
-            document.getElementById('dl-html').href = data.html_url;
+
+            const dlMv = document.getElementById('dl-multiview');
+            if (data.multiview_url) {
+                dlMv.href = data.multiview_url;
+                dlMv.classList.remove('hidden');
+            } else {
+                dlMv.classList.add('hidden');
+            }
+
+            const dlHtml = document.getElementById('dl-html');
+            if (data.html_url) {
+                dlHtml.href = data.html_url;
+                dlHtml.classList.remove('hidden');
+            } else {
+                dlHtml.classList.add('hidden');
+            }
 
             // Multiview image
             const mvImg = document.getElementById('multiview-img');
-            mvImg.src = data.multiview_url;
-            mvImg.classList.remove('hidden');
-            document.getElementById('multiview-empty').classList.add('hidden');
+            if (data.multiview_url) {
+                mvImg.src = data.multiview_url;
+                mvImg.classList.remove('hidden');
+                document.getElementById('multiview-empty').classList.add('hidden');
+            } else {
+                mvImg.classList.add('hidden');
+                document.getElementById('multiview-empty').classList.remove('hidden');
+            }
 
-            // JSON preview
-            document.getElementById('json-pre').textContent = JSON.stringify(data.skeleton, null, 2);
-
-            // Render 3D Viewport
-            renderSkeleton3D(data.skeleton);
+            // JSON preview & 3D Viewport
+            if (data.skeleton) {
+                document.getElementById('json-pre').textContent = JSON.stringify(data.skeleton, null, 2);
+                renderSkeleton3D(data.skeleton);
+            } else {
+                document.getElementById('json-pre').textContent = 'No skeleton data returned.';
+            }
         }
 
         // Tab Switching
@@ -532,16 +592,15 @@
             boneLines = [];
 
             const skel = skeletonData.skeleton || {};
-            const worldPositions = skel.world_positions || [];
-            const jointNames = skel.joint_names || [];
-            const parentIndices = skel.parent_indices || [];
+            const isV2 = (skeletonData.schema_version === "2.0") || Array.isArray(skeletonData.world_positions);
+            const worldPositions = isV2 ? (skeletonData.world_positions || []) : (skel.world_positions || []);
+            const jointNames = isV2 ? (skeletonData.joint_names || []) : (skel.joint_names || []);
+            const parentIndices = isV2 ? (skeletonData.parent_indices || []) : (skel.parent_indices || []);
 
             if (worldPositions.length === 0) return;
 
-            // Camera frame: root (joint 0) is pelvis center
-            // Camera coordinate system: X-right, Y-DOWN, Z-forward
-            // Three.js world coordinate system: X-right, Y-UP, Z-towards viewer
             const [rootX, rootY, rootZ] = worldPositions[0];
+            const scale = isV2 ? 0.01 : 1.0; // v2 is in centimeters (cm), legacy is in meters (m)
 
             let minY = Infinity, maxY = -Infinity;
             const transformedPoints = [];
@@ -551,10 +610,18 @@
                 const ry = worldPositions[i][1];
                 const rz = worldPositions[i][2];
 
-                // Coordinate transform: Invert Y so up is UP! Invert Z so depth matches viewer!
-                const tx = rx - rootX;
-                const ty = -(ry - rootY);
-                const tz = -(rz - rootZ);
+                let tx, ty, tz;
+                if (isV2) {
+                    // v2 is standard Maya/Three.js Y-up, Z-forward in cm
+                    tx = (rx - rootX) * scale;
+                    ty = (ry - rootY) * scale;
+                    tz = -(rz - rootZ) * scale;
+                } else {
+                    // Legacy camera frame: X-right, Y-DOWN, Z-forward in meters
+                    tx = (rx - rootX) * scale;
+                    ty = -(ry - rootY) * scale;
+                    tz = -(rz - rootZ) * scale;
+                }
 
                 transformedPoints.push(new THREE.Vector3(tx, ty, tz));
                 if (ty < minY) minY = ty;

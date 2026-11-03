@@ -134,7 +134,35 @@ MHR_127_JOINTS = [
 
 assert len(MHR_127_JOINTS) == 127
 
+import os
+import json
+
+_DEF_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mhr_skeleton_def.json')
+_LOADED_DEF = None
+
+def _get_def_data():
+    global _LOADED_DEF
+    if _LOADED_DEF is None and os.path.exists(_DEF_FILE):
+        try:
+            with open(_DEF_FILE, 'r', encoding='utf-8') as f:
+                _LOADED_DEF = json.load(f)
+        except Exception:
+            _LOADED_DEF = None
+    return _LOADED_DEF
+
 def get_joint_info(idx):
+    if 0 <= idx < 127:
+        d = _get_def_data()
+        if d and 'parent_indices' in d and idx < len(d['parent_indices']):
+            p = d['parent_indices'][idx]
+            a = d['joint_names'][idx] if 'joint_names' in d and idx < len(d['joint_names']) else MHR_127_JOINTS[idx][1]
+            u = d['ue5_joint_names'][idx] if 'ue5_joint_names' in d and idx < len(d['ue5_joint_names']) else MHR_127_JOINTS[idx][2]
+            h = d['humanik_joint_names'][idx] if 'humanik_joint_names' in d and idx < len(d['humanik_joint_names']) else MHR_127_JOINTS[idx][3]
+            c = MHR_127_JOINTS[idx][4]
+            return {'index': idx, 'parent_index': p, 'anatomical_name': a, 'ue5_name': u, 'humanik_name': h, 'is_core': c}
+        p, a, u, h, c = MHR_127_JOINTS[idx]
+        return {'index': idx, 'parent_index': p, 'anatomical_name': a, 'ue5_name': u, 'humanik_name': h, 'is_core': c}
+    return None
     if 0 <= idx < 127:
         p, a, u, h, c = MHR_127_JOINTS[idx]
         return {"index": idx, "parent_index": p, "anatomical_name": a, "ue5_name": u, "humanik_name": h, "is_core": c}

@@ -1,0 +1,39 @@
+{
+  "profile_id": "default_retarget",
+  "source_skeleton_id": "mhr_127",
+  "target_rig_id": "advanced_skeleton_5",
+  "chain_modes": {
+    "spine": "fk",
+    "neck_head": "fk",
+    "left_arm": "ik",
+    "right_arm": "ik",
+    "left_leg": "ik",
+    "right_leg": "ik"
+  },
+  "chain_weights": {
+    "pelvis": 1.0,
+    "spine": 1.0,
+    "neck_head": 1.0,
+    "left_arm": 1.0,
+    "right_arm": 1.0,
+    "left_leg": 1.0,
+    "right_leg": 1.0
+  },
+  "root_motion_mode": "in_place",
+  "pelvis_scale_policy": "hip_ratio",
+  "ground_contact": 0,
+  "ground_height": 0.0,
+  "contact_legs": {
+    "left_leg": 1,
+    "right_leg": 1
+  },
+  "part_mask": {
+    "pelvis": 1,
+    "spine": 1,
+    "neck_head": 1,
+    "left_arm": 1,
+    "right_arm": 1,
+    "left_leg": 1,
+    "right_leg": 1
+  }
+}

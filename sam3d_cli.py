@@ -43,6 +43,7 @@ if not os.path.exists(DEFAULT_SKEL_DEF):
     if os.path.exists(fallback_skel):
         DEFAULT_SKEL_DEF = fallback_skel
 
+
 class SAM3DStandaloneRunner:
     def __init__(self, checkpoint_path=DEFAULT_CKPT, mhr_path=DEFAULT_MHR, skeleton_def_path=DEFAULT_SKEL_DEF, device=None):
         if device is None:
@@ -84,7 +85,17 @@ class SAM3DStandaloneRunner:
                 self.skeleton_def = json.load(f)
             print(f"[SAM3D] Loaded skeleton definition ({self.skeleton_def.get('num_joints', 0)} joints)")
 
-    def process_image(self, image_path, output_dir, bbox=None):
+    def process_image(
+        self,
+        image_path,
+        output_dir,
+        bbox=None,
+        export_fbx=False,
+        export_bvh=False,
+        export_glb=False,
+        render_multiview=True,
+        generate_html=False
+    ):
         os.makedirs(output_dir, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         print(f"\n==========================================")
@@ -96,7 +107,7 @@ class SAM3DStandaloneRunner:
         h, w = img.shape[:2]
 
         if bbox is None:
-            # Full image bounding box with 5% margin padding
+            # Full image bounding box
             boxes = np.array([[0, 0, w, h]], dtype=np.float32)
         else:
             boxes = np.array([bbox], dtype=np.float32)
@@ -109,81 +120,90 @@ class SAM3DStandaloneRunner:
 
         p0 = outputs[0]
 
-        # 1. Export Standard Skeleton JSON & Raw NPZ
+        # 1. Export Standard Skeleton JSON (v2 & legacy) & Raw NPZ
         raw_npz_path, json_path = export_standard_skeleton_and_raw(
             output_dict=p0,
             image_path=image_path,
             output_dir=output_dir,
             base_name=base_name,
-            skeleton_def=self.skeleton_def
+            skeleton_def=self.skeleton_def,
+            bbox=bbox
         )
         print(f"[SAM3D] Exported Raw NPZ: {raw_npz_path}")
         print(f"[SAM3D] Exported Standard JSON: {json_path}")
 
-        # 2. Render 4-View Skeleton Image
-        parent_indices = self.skeleton_def.get("parent_indices", []) if self.skeleton_def else []
-        joint_coords = p0["pred_joint_coords"]
-        keypoints_2d = p0.get("pred_keypoints_2d")
-        multiview_img_path = os.path.join(output_dir, f"{base_name}_multiview.png")
-        render_multiview_skeleton(
-            image_bgr=img,
-            joint_coords=joint_coords,
-            parent_indices=parent_indices,
-            keypoints_2d=keypoints_2d,
-            output_path=multiview_img_path
-        )
-        print(f"[SAM3D] Rendered Multiview Skeleton: {multiview_img_path}")
+        # 2. Render 4-View Skeleton Image (Optional)
+        multiview_img_path = None
+        if render_multiview:
+            parent_indices = self.skeleton_def.get("parent_indices", []) if self.skeleton_def else []
+            joint_coords = p0["pred_joint_coords"]
+            keypoints_2d = p0.get("pred_keypoints_2d")
+            multiview_img_path = os.path.join(output_dir, f"{base_name}_multiview.png")
+            render_multiview_skeleton(
+                image_bgr=img,
+                joint_coords=joint_coords,
+                parent_indices=parent_indices,
+                keypoints_2d=keypoints_2d,
+                output_path=multiview_img_path
+            )
+            print(f"[SAM3D] Rendered Multiview Skeleton: {multiview_img_path}")
 
-        # 3. Generate Standalone Interactive 3D Web Viewer
-        joint_names = self.skeleton_def.get("model_joints_subset", []) if self.skeleton_def else []
-        html_viewer_path = os.path.join(output_dir, f"{base_name}_3d_viewer.html")
-        generate_interactive_html(
-            joint_coords=joint_coords,
-            parent_indices=parent_indices,
-            joint_names=joint_names,
-            output_html_path=html_viewer_path,
-            title=f"SAM 3D Skeleton - {base_name}"
-        )
-        print(f"[SAM3D] Generated Interactive 3D HTML Viewer: {html_viewer_path}")
+        # 3. Generate Standalone Interactive 3D Web Viewer (Optional, uses correct 127 names)
+        html_viewer_path = None
+        if generate_html:
+            parent_indices = self.skeleton_def.get("parent_indices", []) if self.skeleton_def else []
+            joint_coords = p0["pred_joint_coords"]
+            joint_names = self.skeleton_def.get("joint_names", []) if self.skeleton_def else []
+            html_viewer_path = os.path.join(output_dir, f"{base_name}_3d_viewer.html")
+            generate_interactive_html(
+                joint_coords=joint_coords,
+                parent_indices=parent_indices,
+                joint_names=joint_names,
+                output_html_path=html_viewer_path,
+                title=f"SAM 3D Skeleton - {base_name}"
+            )
+            print(f"[SAM3D] Generated Interactive 3D HTML Viewer: {html_viewer_path}")
 
-        # 4. Export Standard FBX / BVH / GLB Skeletons
-        fbx_path = os.path.join(output_dir, f"{base_name}_skeleton.fbx")
-        export_res = export_skeleton_json_to_fbx(json_path, fbx_path)
-        if isinstance(export_res, dict):
-            fbx_res = export_res.get("fbx")
-            bvh_res = export_res.get("bvh")
-            glb_res = export_res.get("glb")
-        else:
-            fbx_res = export_res
-            bvh_res = None
-            glb_res = None
+        # 4. Export Standard FBX / BVH / GLB Skeletons (On-demand)
+        fbx_res = None
+        bvh_res = None
+        glb_res = None
+        if export_fbx or export_bvh or export_glb:
+            fbx_path = os.path.join(output_dir, f"{base_name}_skeleton.fbx")
+            export_res = export_skeleton_json_to_fbx(json_path, fbx_path)
+            if isinstance(export_res, dict):
+                fbx_res = export_res.get("fbx") if export_fbx else None
+                bvh_res = export_res.get("bvh") if export_bvh else None
+                glb_res = export_res.get("glb") if export_glb else None
+            else:
+                fbx_res = export_res if export_fbx else None
 
-        if fbx_res:
-            print(f"[SAM3D] Exported Standard FBX: {fbx_res}")
-        if bvh_res:
-            print(f"[SAM3D] Exported Standard BVH: {bvh_res}")
-        if glb_res:
-            print(f"[SAM3D] Exported Standard GLB: {glb_res}")
+        v2_json_path = os.path.join(output_dir, f"{base_name}_pose_v2.json")
 
         return {
             "image": image_path,
             "raw_npz": raw_npz_path,
             "skeleton_json": json_path,
+            "pose_v2_json": v2_json_path,
             "skeleton_fbx": fbx_res,
             "skeleton_bvh": bvh_res,
             "skeleton_glb": glb_res,
             "multiview_png": multiview_img_path,
-            "html_viewer": html_viewer_path
+            "multiview_render": multiview_img_path,
+            "html_viewer": html_viewer_path,
+            "viewer_html": html_viewer_path
         }
 
 def main():
-    parser = argparse.ArgumentParser(description="SAM 3D Body + DINOv3 Standalone Pipeline (Phase 1)")
+    parser = argparse.ArgumentParser(description="SAM 3D Body + DINOv3 Standalone Pipeline (Phase 2)")
     parser.add_argument("--image", type=str, default="", help="Path to single image")
     parser.add_argument("--folder", type=str, default="", help="Path to folder of images")
     parser.add_argument("--output_dir", type=str, default=os.path.join(REPO_ROOT, "outputs"), help="Directory for output files")
     parser.add_argument("--device", type=str, default="cuda", help="Inference device (cuda/cpu)")
     parser.add_argument("--ckpt", type=str, default=DEFAULT_CKPT, help="Path to model checkpoint")
     parser.add_argument("--mhr", type=str, default=DEFAULT_MHR, help="Path to MHR asset")
+    parser.add_argument("--fbx", action="store_true", help="Export FBX file")
+    parser.add_argument("--html", action="store_true", help="Generate HTML 3D viewer")
 
     args = parser.parse_args()
 
@@ -200,21 +220,24 @@ def main():
         for ext in ["*.jpg", "*.jpeg", "*.png", "*.webp", "*.bmp"]:
             targets.extend(glob.glob(os.path.join(args.folder, ext)))
     else:
-        # Default test sample
-        default_sample = os.path.join(REPO_ROOT, "notebook", "images", "dancing.jpg")
+        default_sample = os.path.join(REPO_ROOT, "test_benchmark", "01_human_standard.jpg")
         if os.path.exists(default_sample):
             targets.append(default_sample)
 
     print(f"[SAM3D] Found {len(targets)} image(s) to process.")
     results = []
     for img_p in targets:
-        res = runner.process_image(img_p, args.output_dir)
+        res = runner.process_image(
+            img_p,
+            args.output_dir,
+            export_fbx=args.fbx,
+            generate_html=args.html
+        )
         if res:
             results.append(res)
 
     print("\n==========================================")
     print(f"[SAM3D] All done! Successfully processed {len(results)} images.")
-    print(f"[SAM3D] Outputs saved in: {args.output_dir}")
 
 if __name__ == "__main__":
     main()

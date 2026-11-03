@@ -229,9 +229,10 @@ def export_skeleton_json_to_fbx(skeleton_json_path, output_fbx_path):
             "glb": None
         }
 
-    # Write helper worker script
-    with open(BLENDER_HELPER_SCRIPT, "w", encoding="utf-8") as f:
-        f.write(BLENDER_WORKER_CODE)
+    # Use existing static worker script if present, write only if missing
+    if not os.path.exists(BLENDER_HELPER_SCRIPT):
+        with open(BLENDER_HELPER_SCRIPT, "w", encoding="utf-8") as f:
+            f.write(BLENDER_WORKER_CODE)
 
     cmd = [
         blender_exe,

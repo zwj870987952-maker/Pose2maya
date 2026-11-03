@@ -6,13 +6,14 @@ import glob
 import uuid
 import shutil
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, send_from_directory, send_file
+from typing import Optional, Dict, Any, List
+from flask import Flask, request, jsonify, render_template, send_from_directory
 
 # Add repo root to path
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(REPO_ROOT)
 
-from sam3d_cli import SAM3DStandaloneRunner, DEFAULT_CKPT, DEFAULT_MHR, DEFAULT_SKEL_DEF
+from services.inference_service import InferenceService
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config['MAX_CONTENT_LENGTH'] = 64 * 1024 * 1024  # 64MB max upload
@@ -23,21 +24,8 @@ OUTPUTS_DIR = os.path.join(REPO_ROOT, "outputs")
 WEBUI_OUTPUTS_DIR = os.path.join(OUTPUTS_DIR, "webui")
 os.makedirs(WEBUI_OUTPUTS_DIR, exist_ok=True)
 
-# Global runner instance
-runner = None
-
-def get_runner():
-    global runner
-    if runner is None:
-        print("[WebUI] Initializing SAM 3D Body Runner on GPU...")
-        runner = SAM3DStandaloneRunner(
-            checkpoint_path=DEFAULT_CKPT,
-            mhr_path=DEFAULT_MHR,
-            skeleton_def_path=DEFAULT_SKEL_DEF,
-            device="cuda"
-        )
-        print("[WebUI] Runner initialized successfully!")
-    return runner
+# Service instance
+service = InferenceService()
 
 PRESET_LIST = [
     {
@@ -84,16 +72,26 @@ def index():
 
 @app.route("/api/status")
 def get_status():
-    import torch
-    cuda_avail = torch.cuda.is_available()
-    device_name = torch.cuda.get_device_name(0) if cuda_avail else "CPU"
-    vram_total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3) if cuda_avail else 0
+    cuda_avail = False
+    device_name = "CPU"
+    vram_total_gb = 0.0
+    torch_version = "N/A"
+    try:
+        import torch
+        cuda_avail = torch.cuda.is_available()
+        device_name = torch.cuda.get_device_name(0) if cuda_avail else "CPU"
+        vram_total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3) if cuda_avail else 0
+        torch_version = torch.__version__
+    except Exception:
+        pass
+
     return jsonify({
         "cuda_available": cuda_avail,
         "device_name": device_name,
         "vram_total_gb": round(vram_total_gb, 1),
-        "torch_version": torch.__version__,
-        "model_loaded": runner is not None
+        "torch_version": torch_version,
+        "queue_size": service.job_queue.qsize(),
+        "model_loaded": service.runner is not None
     })
 
 @app.route("/api/presets")
@@ -108,12 +106,143 @@ def serve_preset(filename):
 def serve_output(filepath):
     return send_from_directory(OUTPUTS_DIR, filepath)
 
+# -----------------------------------------------------------------------------
+# Asynchronous Task API (POST /api/jobs, GET /api/jobs/<job_id>)
+# -----------------------------------------------------------------------------
+
+@app.route("/api/jobs", methods=["POST"])
+def create_job():
+    try:
+        preset_id = request.form.get("preset_id", "").strip()
+        uploaded_file = request.files.get("file")
+        bbox_str = request.form.get("bbox", "").strip()
+
+        bbox = None
+        if bbox_str:
+            try:
+                bbox = json.loads(bbox_str)
+            except Exception:
+                pass
+
+        export_fbx = request.form.get("export_fbx", "false").lower() == "true"
+        render_multiview = request.form.get("render_multiview", "true").lower() == "true"
+        generate_html = request.form.get("generate_html", "false").lower() == "true"
+
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + uuid.uuid4().hex[:6]
+        run_dir = os.path.join(WEBUI_OUTPUTS_DIR, run_id)
+        os.makedirs(run_dir, exist_ok=True)
+
+        if preset_id:
+            src_path = os.path.join(BENCHMARK_DIR, preset_id)
+            if not os.path.exists(src_path):
+                return jsonify({"error": f"预设图片不存在: {preset_id}"}), 400
+            ext = os.path.splitext(preset_id)[1]
+            img_path = os.path.join(run_dir, f"input{ext}")
+            shutil.copy2(src_path, img_path)
+        elif uploaded_file and uploaded_file.filename:
+            ext = os.path.splitext(uploaded_file.filename)[1] or ".jpg"
+            img_path = os.path.join(run_dir, f"input{ext}")
+            uploaded_file.save(img_path)
+        else:
+            return jsonify({"error": "请上传图片或选择预设样本"}), 400
+
+        job = service.submit_job(
+            image_path=img_path,
+            bbox=bbox,
+            export_fbx=export_fbx,
+            render_multiview=render_multiview,
+            generate_html=generate_html
+        )
+
+        return jsonify({
+            "job_id": job.job_id,
+            "status": job.status,
+            "created_at": job.created_at
+        }), 202
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "ok",
+        "service": "pose2maya",
+        "timestamp": datetime.now().isoformat()
+    }), 200
+
+def to_output_url(path: Optional[str]) -> Optional[str]:
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        rel = os.path.relpath(path, OUTPUTS_DIR).replace("\\", "/")
+        return f"/outputs/{rel}"
+    except Exception:
+        return None
+
+@app.route("/api/jobs/<job_id>", methods=["GET"])
+def get_job_status(job_id):
+    job = service.get_job(job_id)
+    if not job:
+        return jsonify({"error": f"Job not found: {job_id}"}), 404
+
+    res_data = job.to_dict()
+    if job.status == "succeeded" and job.result:
+        res = job.result
+        skel_path = res.get("pose_v2_json") or res.get("skeleton_json")
+        skeleton_data = None
+        if skel_path and os.path.exists(skel_path):
+            try:
+                with open(skel_path, "r", encoding="utf-8") as f:
+                    skeleton_data = json.load(f)
+            except Exception:
+                pass
+
+        if skeleton_data and ("parent_indices" not in skeleton_data or not skeleton_data.get("parent_indices")):
+            try:
+                from pose_core.mhr_adapter import get_authoritative_mhr_skeleton_def
+                skel_def = get_authoritative_mhr_skeleton_def()
+                skeleton_data["parent_indices"] = skel_def.parent_indices
+                skeleton_data["joint_names"] = skel_def.joint_names
+            except Exception:
+                pass
+
+        # Safe latency calculation
+        lat = getattr(job, "latency_seconds", None)
+        if lat is None:
+            lat = res.get("latency_seconds")
+        if lat is None and getattr(job, "started_time", None):
+            lat = round(time.time() - job.started_time, 2)
+        if lat is None:
+            lat = 0.0
+
+        dto = {
+            "success": True,
+            "run_id": job.job_id,
+            "orig_name": os.path.basename(job.image_path) if job.image_path else "",
+            "latency_seconds": float(lat),
+            "multiview_url": to_output_url(res.get("multiview_png") or res.get("multiview_render")),
+            "json_url": to_output_url(res.get("pose_v2_json") or res.get("skeleton_json")),
+            "npz_url": to_output_url(res.get("raw_npz")),
+            "fbx_url": to_output_url(res.get("skeleton_fbx")),
+            "bvh_url": to_output_url(res.get("skeleton_bvh")),
+            "glb_url": to_output_url(res.get("skeleton_glb")),
+            "html_url": to_output_url(res.get("html_viewer") or res.get("viewer_html")),
+            "skeleton": skeleton_data
+        }
+        res_data["result"] = dto
+        res_data["skeleton"] = skeleton_data
+
+    return jsonify(res_data)
+
+# -----------------------------------------------------------------------------
+# Synchronous Compatibility Endpoint (POST /api/predict)
+# -----------------------------------------------------------------------------
+
 @app.route("/api/predict", methods=["POST"])
 def predict():
     try:
         t0 = time.time()
-        active_runner = get_runner()
-
         preset_id = request.form.get("preset_id", "").strip()
         uploaded_file = request.files.get("file")
 
@@ -131,31 +260,38 @@ def predict():
             orig_name = preset_id
         elif uploaded_file and uploaded_file.filename:
             orig_name = uploaded_file.filename
-            ext = os.path.splitext(orig_name)[1]
-            if not ext:
-                ext = ".jpg"
+            ext = os.path.splitext(orig_name)[1] or ".jpg"
             img_path = os.path.join(run_dir, f"input{ext}")
             uploaded_file.save(img_path)
         else:
             return jsonify({"error": "请上传图片或选择预设样本"}), 400
 
-        # Run inference
-        result = active_runner.process_image(img_path, output_dir=run_dir)
-        if result is None:
-            return jsonify({"error": "模型未检测到人体姿态，请更换清晰的人体图像"}), 422
+        # Submit to queue and block until finished
+        job = service.submit_job(
+            image_path=img_path,
+            export_fbx=True,
+            render_multiview=True,
+            generate_html=True
+        )
 
+        while job.status in ["queued", "running"]:
+            time.sleep(0.1)
+
+        if job.status == "failed":
+            return jsonify({"error": job.error or "Inference failed"}), 422
+
+        result = job.result
         elapsed = round(time.time() - t0, 2)
         base_name = os.path.splitext(os.path.basename(img_path))[0]
 
-        # Read JSON content to return for client-side Three.js
         with open(result["skeleton_json"], "r", encoding="utf-8") as f:
             skeleton_data = json.load(f)
 
-        rel_run_dir = os.path.relpath(run_dir, OUTPUTS_DIR).replace("\\", "/")
+        rel_run_dir = os.path.relpath(os.path.dirname(result["skeleton_json"]), OUTPUTS_DIR).replace("\\", "/")
 
         return jsonify({
             "success": True,
-            "run_id": run_id,
+            "run_id": job.job_id,
             "orig_name": orig_name,
             "latency_seconds": elapsed,
             "multiview_url": f"/outputs/{rel_run_dir}/{base_name}_multiview.png",
@@ -169,8 +305,6 @@ def predict():
         })
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/history")
@@ -197,6 +331,4 @@ def get_history():
     return jsonify(runs)
 
 if __name__ == "__main__":
-    # Preload runner
-    get_runner()
     app.run(host="0.0.0.0", port=7860, debug=False)

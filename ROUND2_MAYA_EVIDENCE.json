@@ -1,0 +1,329 @@
+{
+  "environment": {
+    "pid": 154608,
+    "maya_version": "2025",
+    "batch": false,
+    "python": "3.11.4 (tags/v3.11.4:d2340ef, Jun  7 2023, 05:45:37) [MSC v.1934 64 bit (AMD64)]",
+    "linear_unit": "cm",
+    "initial_node_count": 51,
+    "initial_joint_count": 0,
+    "initial_state": {
+      "scene": "",
+      "modified": false,
+      "frame": 0,
+      "selection": [],
+      "namespace": ":",
+      "autokey": true,
+      "undo_enabled": true,
+      "undo_name": "rendererSceneOpenedCallback",
+      "redo_name": ""
+    },
+    "owned_namespace": "p2m_r2_audit_13b87a98438b",
+    "reference_character_present": false
+  },
+  "checks": [
+    {
+      "id": "L01_AUD14_AUD05_scene_calibration",
+      "execution": "completed",
+      "observed": {
+        "error": {
+          "type": "TypeError",
+          "message": "euler_to_q() got multiple values for argument 'order'"
+        },
+        "measured_left_arm": [
+          10,
+          30
+        ],
+        "expected_upper_lower": [
+          30,
+          30
+        ],
+        "measured_anchor": [
+          0,
+          100,
+          0
+        ],
+        "expected_shoulder_anchor": [
+          10,
+          100,
+          0
+        ],
+        "evidence_type": "live_Maya_scene_queries"
+      }
+    },
+    {
+      "id": "L02_AUD06_world_rotation_under_parent",
+      "execution": "completed",
+      "observed": {
+        "report": "success",
+        "goal_world_t": [
+          100,
+          0,
+          -10
+        ],
+        "actual_world_t": [
+          100,
+          0,
+          -10
+        ],
+        "position_error_cm": 0,
+        "world_rotation_error_deg": 90,
+        "local_rotation": [
+          0,
+          0,
+          0
+        ],
+        "expected_world_rotation_deg": 0
+      }
+    },
+    {
+      "id": "L03_AUD06_offset_parent_matrix",
+      "execution": "completed",
+      "observed": {
+        "report": "success",
+        "goal_world_t": [
+          10,
+          0,
+          0
+        ],
+        "actual_world_t": [
+          15,
+          0,
+          0
+        ],
+        "error_cm": 5,
+        "can_apply": true
+      }
+    },
+    {
+      "id": "L04_AUD08_changed_preview_channel_set",
+      "execution": "completed",
+      "observed": {
+        "report": "cancelled",
+        "a_after_cancel": 1,
+        "b_after_cancel": 30,
+        "expected": {
+          "a": 1,
+          "b": 2
+        }
+      }
+    },
+    {
+      "id": "L05_AUD08_failed_commit_keys",
+      "execution": "completed",
+      "observed": {
+        "report": "failed",
+        "messages": [
+          "Execution error during commit (all changes rolled back): AUDIT_INJECTED_SECOND_KEY_FAILURE"
+        ],
+        "a_value": 1,
+        "b_value": 2,
+        "a_key_times_remaining": [
+          12
+        ],
+        "a_key_values_remaining": [
+          10
+        ],
+        "b_key_times_remaining": [],
+        "frame_before": 0,
+        "frame_after_failed_commit": 12,
+        "evidence_type": "live_Maya_with_failure_injection"
+      }
+    },
+    {
+      "id": "L06_AUD17_required_channel_preflight",
+      "execution": "completed",
+      "observed": {
+        "can_apply": true,
+        "blockers": [],
+        "warnings": [
+          "Mode switch attribute is locked: p2m_r2_audit_13b87a98438b:preflightSwitch.mode",
+          "Attribute is locked, skipping: p2m_r2_audit_13b87a98438b:preflightCtrl.rx"
+        ],
+        "planned_channel_count": 2,
+        "planned_mode_switches": [],
+        "expected_can_apply": false,
+        "applied_to_scene": false
+      }
+    },
+    {
+      "id": "L07_AUD08_existing_animation_and_time",
+      "execution": "completed",
+      "observed": {
+        "error": null,
+        "statuses": [
+          "preview",
+          "cancelled"
+        ],
+        "value_after_preview": 7,
+        "value_at_frame5_before_cancel": 4.753086419753085,
+        "value_at_frame5_after_cancel": 1,
+        "keys_before": [
+          1,
+          10
+        ],
+        "keys_after": [
+          1,
+          10
+        ],
+        "note": "Preview began at frame1; cancel performed at frame5."
+      }
+    },
+    {
+      "id": "L08_AUD12_Maya_rotation_orders",
+      "execution": "completed",
+      "observed": {
+        "error_degrees_vs_Maya_OpenMaya": {
+          "xyz": 0,
+          "yzx": 0,
+          "zxy": 0,
+          "xzy": 0,
+          "yxz": 0,
+          "zyx": 0
+        },
+        "angles": [
+          20,
+          -35,
+          50
+        ]
+      }
+    },
+    {
+      "id": "L09_AUD02_AUD04_neutral_DCC_skeleton",
+      "execution": "completed",
+      "observed": {
+        "joint_count": 54,
+        "apply_returned": true,
+        "max_neutral_pose_position_change_cm": 119.42086580845822,
+        "worst_joint": "p2m_r2_audit_13b87a98438b:Neutral_ball_l",
+        "worst_before": [
+          14.04177225810701,
+          6.960205213188983,
+          -1.255766648405885
+        ],
+        "worst_after": [
+          -64.99258827850856,
+          88.16341286861774,
+          -38.951285101921904
+        ],
+        "joint_orient_unchanged": true,
+        "expected_neutral_position_change_cm": 0,
+        "evidence_type": "live_Maya_native_joint_hierarchy_not_character_rig"
+      }
+    },
+    {
+      "id": "L10_AUD07_neutral_FK_end",
+      "execution": "completed",
+      "observed": {
+        "neutral_hand_ctrl_euler": [
+          0,
+          0,
+          29.999999999999996
+        ],
+        "expected_delta": [
+          0,
+          0,
+          0
+        ],
+        "evidence_type": "project_pure_core_executed_in_Maya_process"
+      }
+    }
+  ],
+  "cleanup": {
+    "scene_signature_unchanged": true,
+    "owned_namespace_removed": true,
+    "node_count_after": 51,
+    "anim_curve_count_after": 0,
+    "scene": "",
+    "modified": false,
+    "frame": 0,
+    "selection": [],
+    "namespace": ":",
+    "autokey": true,
+    "undo_enabled": true,
+    "undo_name": "rendererSceneOpenedCallback",
+    "redo_name": "",
+    "errors": []
+  },
+  "module_hashes": {
+    "pose_core.mhr_adapter": {
+      "file": "E:\\GitHub\\Pose2maya\\pose_core\\mhr_adapter.py",
+      "sha256": "57fd845eccbce75cee17530536ba38fed4d2196ead7092458afeedeadbdf9b7b"
+    },
+    "maya_scripts.rig_inspector": {
+      "file": "E:\\GitHub\\Pose2maya\\maya_scripts\\rig_inspector.py",
+      "sha256": "555ee3a5c6b47d38b90d407d2dd6e751bf48860333ba4a8884afb3c9fa39a1da"
+    },
+    "maya_scripts.rig_adapter": {
+      "file": "E:\\GitHub\\Pose2maya\\maya_scripts\\rig_adapter.py",
+      "sha256": "9dfc3c090c843c6db0c5b1c65e0c06316f39d06cd9b18a66b874c4247460c163"
+    },
+    "maya_scripts.pose_session": {
+      "file": "E:\\GitHub\\Pose2maya\\maya_scripts\\pose_session.py",
+      "sha256": "85cc61a7a4b281e5b47c70d41d272d35c026c378535b36db51ab22ea3a410e88"
+    },
+    "retarget.ops.end_effector_op": {
+      "file": "E:\\GitHub\\Pose2maya\\retarget\\ops\\end_effector_op.py",
+      "sha256": "7c89dae5cc48ed096e7a5d668e35f887f0972738941ee25ebf39274696f41b7a"
+    }
+  },
+  "evidence_id": "POSE2MAYA-R2-LIVE-20261102",
+  "gateway": {
+    "instance_id": "5500156c-0aa4-4afa-8345-e556e47912b9",
+    "request_id": "8",
+    "tool": "maya_scripting__execute_python"
+  },
+  "final_GUI_readback": {
+    "node_count": 51,
+    "joint_count": 0,
+    "anim_curve_count": 0,
+    "scene": "",
+    "modified": false,
+    "frame": 0,
+    "selection": [],
+    "namespace": ":",
+    "autokey": true,
+    "undo_enabled": true,
+    "undo_name": "rendererSceneOpenedCallback",
+    "redo_name": "",
+    "audit_namespace_leftovers": [
+      "UI",
+      "shared"
+    ]
+  },
+  "supporting_checks": [
+    {
+      "check": "AUD-09 front-end syntax",
+      "results": [
+        {
+          "script": 3,
+          "parse_ok": false,
+          "error": "SyntaxError",
+          "message": "Unexpected token '{'"
+        }
+      ]
+    },
+    {
+      "check": "AUD-09 successful job API",
+      "success_job_http_status": 500,
+      "health_http_status": 404,
+      "started_at_declared": false
+    }
+  ],
+  "evidence_boundary": {
+    "live_GUI": true,
+    "real_character_rig_tested": false,
+    "real_GPU_inference_tested": false,
+    "undo_recording_disabled_during_mutating_probes": true,
+    "autokey_disabled_during_mutating_probes": true,
+    "single_step_user_undo_not_exercised": true,
+    "scene_file_saved_or_replaced": false,
+    "project_source_modified": false,
+    "scene_signature_covers": [
+      "node_names_and_UUIDs",
+      "all_existing_transform_TRS_rotateOrder_visibility",
+      "animation_curve_node_inventory"
+    ],
+    "clarification": "L01-L07/L09 use real Maya nodes and cmds. L05 injects only the second keyframe failure. L08 compares to native OpenMaya. L10 runs the pure core inside Maya. This is not AS5/UE5/HumanIK character acceptance."
+  }
+}
